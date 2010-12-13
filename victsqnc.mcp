@@ -36,7 +36,7 @@ file_000=no
 file_001=no
 file_002=no
 [FILE_INFO]
-file_000=/home/chris/Dev\projects\simsigsq\pic\BLCKSQNC.ASM
+file_000=/home/chris/Dev\projects\mas4sqnc\blcksqnc.asm
 file_001=/home/chris/DEV\PROJECTS\UTILITY\PIC\ASYN_SRL.INC
 file_002=/home/chris/DEV\PROJECTS\UTILITY\PIC\MONITOR.INC
 [SUITE_INFO]
