@@ -81,11 +81,13 @@ RTCCINT     EQU     158         ; 10KHz = (1MHz / 100) - RTCC write inhibit (2)
 INTSERBIT   EQU     4           ; Interrupts per serial bit @ 2K5 baud
 INTSERINI   EQU     6           ; Interrupts per initial Rx serial bit @ 2K5
 INTLINKDEL  EQU     0           ; Interrupt cycles for link turnaround delays
+INTLINKTMO  EQU     100         ; Interrupt cycles for link Rx idle timeout
 
-; Next signal interface constants
+; Next signal serial interface constants (see 'asyn_srl.inc')
 RXNFLAG     EQU     0           ; Receive byte buffer 'loaded' status bit
 RXNERR      EQU     1           ; Receive error status bit
 RXNBREAK    EQU     2           ; Received 'break' status bit
+RXNSTOP     EQU     2           ; Seeking stop bit
 RXNTRIS     EQU     TRISB       ; Rx port direction register
 RXNPORT     EQU     PORTB       ; Rx port data register
 RXNBIT      EQU     1           ; Rx input bit
@@ -94,10 +96,11 @@ TXNTRIS     EQU     TRISA       ; Tx port direction register
 TXNPORT     EQU     PORTA       ; Tx port data register
 TXNBIT      EQU     1           ; Tx output bit
 
-; Previous signal interface constants
+; Previous signal serial interface constants (see 'asyn_srl.inc')
 RXPFLAG     EQU     3           ; Receive byte buffer 'loaded' status bit
 RXPERR      EQU     4           ; Receive error status bit
 RXPBREAK    EQU     5           ; Received 'break' status bit
+RXPSTOP     EQU     2           ; Seeking stop bit
 RXPTRIS     EQU     TRISB       ; Rx port direction register
 RXPPORT     EQU     PORTB       ; Rx port data register
 RXPBIT      EQU     2           ; Rx input bit
@@ -110,8 +113,6 @@ TXPBIT      EQU     2           ; Tx output bit
 INTSCLNG    EQU     80 + 1      ; Interrupts scaling for seconds
 SECSCLNG    EQU     125         ; Scaled interrupts per second
 HALFSEC     EQU     B'11000000' ; Roughly half second scaled interrupts mask
-
-NEXTTIMEOUT EQU     13 + 1      ; Next signal link timeout (scaled interrupts)
 
 ; Detector I/O constants
 EMTPORT         EQU     PORTA   ; Emitter drive port
@@ -175,21 +176,65 @@ pclath_isr      ; PCLATH register store during ISR
 status_isr      ; status register store during ISR
 
 ; Serial interface
-srlIfStat       ; Serial I/F status flags
+srlIfStat       ; Serial I/F status flags (see 'asyn_srl.inc')
+                ;
+                ;  Next link (half duplex so Rx and Tx flags share bits)
+                ;  =====================================================
+                ;
+                ;   bit 0 - Rx buffer 'loaded', Tx buffer 'clear'
+                ;   bit 1 - Rx error
+                ;   bit 2 - Received 'break'
+                ;   bit 3 - Seeking stop bit
+                ;
+                ;  Previous link (half duplex so Rx and Tx flags share bits)
+                ;  =========================================================
+                ;
+                ;   bit 4 - Rx buffer 'loaded', Tx buffer 'clear'
+                ;   bit 5 - Rx error
+                ;   bit 6 - Received 'break'
+                ;   bit 7 - Seeking stop bit
 
 ; Next signal interface
 serNTmr         ; Interrupt counter for serial bit timing
 serNReg         ; Data shift register
 serNByt         ; Data byte buffer
 serNBitCnt      ; Bit down counter
-lnkNState       ; Link state register
+lnkNState       ; Link state register (see 'link_hd.inc')
+                ;   bit 0,3 - Current state
+                ;     0 - Switching to Rx
+                ;     1 - Waiting for interface to 'settle'
+                ;     2 - Rx Idle
+                ;     3 - Receiving data
+                ;     4 - Switching to Tx
+                ;     5 - Waiting for far end to 'turn around'
+                ;     6 - Waiting for interface to 'settle'
+                ;     7 - Dummy state, go to Tx Idle
+                ;     8 - Tx idle
+                ;     9 - Transmiting data
+                ;   bit 4,5 - Unused
+                ;   bit 6   - Rx idle timedout without receiving any data
+                ;   bit 7   - Required direction, set = Tx, clear = Rx
 
 ; Previous signal interface
 serPTmr         ; Interrupt counter for serial bit timing
 serPReg         ; Data shift register
 serPByt         ; Data byte buffer
 serPBitCnt      ; Bit down counter
-lnkPState       ; Link state register
+lnkPState       ; Link state register (see 'link_hd.inc')
+                ;   bit 0,3 - Current state
+                ;     0 - Switching to Rx
+                ;     1 - Waiting for interface to 'settle'
+                ;     2 - Rx Idle
+                ;     3 - Receiving data
+                ;     4 - Switching to Tx
+                ;     5 - Waiting for far end to 'turn around'
+                ;     6 - Waiting for interface to 'settle'
+                ;     7 - Dummy state, go to Tx Idle
+                ;     8 - Tx idle
+                ;     9 - Transmiting data
+                ;   bit 4,5 - Unused
+                ;   bit 6   - Rx idle timedout without receiving any data
+                ;   bit 7   - Required direction, set = Tx, clear = Rx
 
 intScCount       ; Interrupt scaling counter for second timing
 secCount        ; Scaled interrupts counter for second timing
@@ -200,35 +245,40 @@ detAcc          ; Detection input debounce accumulator
 inhAcc          ; Inhibit input debounce accumulator
 spdAcc          ; Speed input debounce accumulator
 
-sigState        ; Signalling status (for this signal)
+lclState        ; Local signalling status
                 ;   bits 0,1 - Signal block state
-                ;     3 - Train leaving block
-                ;     2 - Block occupied
-                ;     1 - Train entering Block
                 ;     0 - Block Clear
+                ;     1 - Train entering Block
+                ;     2 - Block occupied
+                ;     3 - Train leaving block
                 ;   bit 2 - Unused
                 ;   bit 3 - Inhibit state
                 ;   bit 4 - Special speed
                 ;   bit 5 - Detection state
                 ;   bits 6,7 - Aspect value
-                ;     3 - Green
-                ;     2 - Double Yellow
-                ;     1 - Yellow
                 ;     0 - Red
+                ;     1 - Yellow
+                ;     2 - Double Yellow
+                ;     3 - Green
 
-nxtState        ; Signalling status received from next signal
+rmtState        ; Remote signalling status
+                ;
+                ;   From previous signal
+                ;   ====================
                 ;   bits 0,3 - Unused
+                ;
+                ;   From next signal
+                ;   ================
                 ;   bit 4 - Special speed
                 ;   bit 5 - Detection state
                 ;   bits 6,7 - Aspect value
-                ;     3 - Green
-                ;     2 - Double Yellow
-                ;     1 - Yellow
                 ;     0 - Red
+                ;     1 - Yellow
+                ;     2 - Double Yellow
+                ;     3 - Green
 
 aspectTime      ; Aspect interval for simulating next signal
 nxtTimer        ; Second counter for simulating next signal
-nxtLnkTmr       ; Scaled interrupts counter for timing out next signal link
 telemData       ; Data received from next or sent to previous signal
 
 redDuty         ; PWM duty cycle for red aspect
@@ -248,7 +298,7 @@ pwmDutyM        ; Current PWM duty cycle for 'medium speed' aspects
 
             ORG     0x2100  ; EEPROM data area
 
-EEaspectTime    DE  6 + 1   ; Seconds to delay between aspect changes
+EEaspectTime    DE  6       ; Seconds to delay between aspect changes
 EEredDuty       DE  0xFF    ; PWM duty cycle value for red aspect
 EEylwDuty       DE  0x50    ; PWM duty cycle value for yellow aspect
 EEgrnDuty       DE  0x00    ; PWM duty cycle value for green aspect
@@ -361,10 +411,10 @@ EndISR
 EnableRxN   EnableRx  RXNTRIS, RXNPORT, RXNBIT
     return
 
-InitRxN     InitRx  serNTmr, srlIfStat, RXNFLAG, RXNERR, RXNBREAK
+InitRxN     InitRx  serNTmr, srlIfStat, RXNFLAG, RXNERR, RXNBREAK, RXNSTOP
     return
 
-SrvcRxN     ServiceRx serNTmr, RXNPORT, RXNBIT, serNBitCnt, INTSERINI, srlIfStat, RXNERR, RXNBREAK, serNReg, serNByt, RXNFLAG, INTSERBIT
+SrvcRxN     ServiceRx serNTmr, RXNPORT, RXNBIT, serNBitCnt, INTSERINI, srlIfStat, RXNERR, RXNBREAK, RXNSTOP, serNReg, serNByt, RXNFLAG, INTSERBIT
 
 SerRxN      SerialRx srlIfStat, RXNFLAG, serNByt
 
@@ -382,7 +432,7 @@ LinkRxN		LinkRx lnkNState, SerRxN
 
 LinkTxN		LinkTx lnkNState, SerTxN
 
-SrvcLinkN	SrvcLink   SrvcRxN, SrvcTxN, lnkNState, INTLINKDEL, serNTmr, EnableTxN, InitTxN, EnableRxN, InitRxN
+SrvcLinkN	SrvcLink   SrvcRxN, SrvcTxN, lnkNState, INTLINKDEL, INTLINKTMO, serNTmr, EnableTxN, InitTxN, EnableRxN, InitRxN
 
 
 ;**********************************************************************
@@ -392,10 +442,10 @@ SrvcLinkN	SrvcLink   SrvcRxN, SrvcTxN, lnkNState, INTLINKDEL, serNTmr, EnableTxN
 EnableRxP   EnableRx  RXPTRIS, RXPPORT, RXPBIT
     return
 
-InitRxP     InitRx  serPTmr, srlIfStat, RXPFLAG, RXPERR, RXPBREAK
+InitRxP     InitRx  serPTmr, srlIfStat, RXPFLAG, RXPERR, RXPBREAK, RXPSTOP
     return
 
-SrvcRxP     ServiceRx serPTmr, RXPPORT, RXPBIT, serPBitCnt, INTSERINI, srlIfStat, RXPERR, RXPBREAK, serPReg, serPByt, RXPFLAG, INTSERBIT
+SrvcRxP     ServiceRx serPTmr, RXPPORT, RXPBIT, serPBitCnt, INTSERINI, srlIfStat, RXPERR, RXPBREAK, RXPSTOP, serPReg, serPByt, RXPFLAG, INTSERBIT
 
 SerRxP      SerialRx srlIfStat, RXPFLAG, serPByt
 
@@ -413,7 +463,7 @@ LinkRxP		LinkRx lnkPState, SerRxP
 
 LinkTxP		LinkTx lnkPState, SerTxP
 
-SrvcLinkP	SrvcLink   SrvcRxP, SrvcTxP, lnkPState, INTLINKDEL, serPTmr, EnableTxP, InitTxP, EnableRxP, InitRxP
+SrvcLinkP	SrvcLink   SrvcRxP, SrvcTxP, lnkPState, INTLINKDEL, INTLINKTMO, serPTmr, EnableTxP, InitTxP, EnableRxP, InitRxP
 
 
 ;**********************************************************************
@@ -451,17 +501,19 @@ Boot
     ; Initialise next signal serial interface
     SerInit    srlIfStat, serNTmr, serNReg, serNByt, serNBitCnt, serNTmr, serNReg, serNByt, serNBitCnt
 
+    ; Initialise previous signal serial interface
+    SerInit    srlIfStat, serPTmr, serPReg, serPByt, serPBitCnt, serPTmr, serPReg, serPByt, serPBitCnt
+
     ; Initialise next signal link to receive
     movlw   SWITCH2RXSTATE
     movwf   lnkNState
+    bcf     lnkNState,LNKDIRFLAG
     call    SrvcLinkN
-
-    ; Initialise previous signal serial interface
-    SerInit    srlIfStat, serPTmr, serPReg, serPByt, serPBitCnt, serPTmr, serPReg, serPByt, serPBitCnt
 
     ; Initialise previous signal link to transmit
     movlw   SWITCH2TXSTATE
     movwf   lnkPState
+    bsf     lnkPState,LNKDIRFLAG
     call    SrvcLinkP
 
     ; Initialise input debounce accumulators
@@ -475,9 +527,9 @@ Boot
     decf    spdAcc,F        ; Rollover through zero to 'full house'
 
     movlw   ASPGREEN
-    movwf   sigState        ; Initialise this signal to green aspect
+    movwf   lclState        ; Initialise this signal to green aspect
 
-    clrf    nxtState        ; Initialise next signal to cycle to green aspect
+    clrf    rmtState        ; Initialise next signal to cycle to green aspect
 
     ; Initialise aspect output PWM
     movlw   low EEredDuty
@@ -510,9 +562,6 @@ Boot
     movwf   aspectTime      ; Initialise aspect interval for next signal
     movwf   nxtTimer        ; Initialise timer used to simulate next signal
 
-    clrf    nxtLnkTmr       ; Initialise next signal link as timedout
-    incf    nxtLnkTmr,F     ; Prevent rollover down through zero
-
     clrf    telemData       ; Clear serial link data store
 
     ; Initialise interrupts
@@ -538,9 +587,6 @@ Timing
 
     movlw   INTSCLNG        ; Reload interrupt scaling counter
     movwf   intScCount
-
-    decfsz  nxtLnkTmr,W     ; Decrement next signal link timeout timer into W
-    movwf   nxtLnkTmr       ; If result is not zero update the timer
 
     decfsz  secCount,F      ; Decrement seconds scaled interrupts counter ...
     goto    TimingEnd       ; ... skipping this jump if it has reached zero
@@ -632,7 +678,7 @@ EndDetector
 
     andlw   INPHIGHWTR      ; Test if above off threshold
     btfss   STATUS,Z        ; Skip if not above off threshold ...
-    bcf     sigState,DETFLG ; ... else set detection state to off
+    bcf     lclState,DETFLG ; ... else set detection state to off
     goto    DetectEnd    
 
 DecDetAcc
@@ -641,8 +687,8 @@ DecDetAcc
     btfss   STATUS,Z        ; Skip if reached zero ...
     movwf   detAcc          ; ... else update the accumulator
 
-    btfsc   STATUS,Z        ; Skip if above on threshold ...
-    bsf     sigState,DETFLG ; ... else set train detection state to on
+    btfsc   STATUS,Z        ; Skip if above on threshold (not reached zero) ...
+    bsf     lclState,DETFLG ; ... else set train detection state to on
 
 DetectEnd
 
@@ -651,7 +697,7 @@ DetectEnd
     btfss   SPDPORT,SPDBIT  ; Skip if special speed input is set ...
     goto    DecSpdAcc       ; ... else jump if not set
 
-    incf  spdAcc,W          ; Increment special speed input accumulator
+    incf    spdAcc,W        ; Increment special speed input accumulator
     btfsc   STATUS,Z        ; Skip if not rolled over to zero ...
     goto    SpeedEnd        ; ... else do nothing
     
@@ -659,17 +705,17 @@ DetectEnd
 
     andlw   INPHIGHWTR      ; Test if above off threshold
     btfss   STATUS,Z        ; Skip if not above off threshold ...
-    bcf     sigState,SPDFLG ; ... else set speed state to normal
+    bcf     lclState,SPDFLG ; ... else set speed state to normal
     goto    SpeedEnd   
 
 DecSpdAcc
-    decf  spdAcc,W          ; Decrement speed input accumulator
+    decf    spdAcc,W        ; Decrement speed input accumulator
 
     btfss   STATUS,Z        ; Skip if reached zero ...
     movwf   spdAcc          ; ... else update the accumulator
 
-    btfsc   STATUS,Z        ; Skip if above on threshold ...
-    bsf     sigState,SPDFLG ; ... else set speed state to special
+    btfsc   STATUS,Z        ; Skip if above on threshold (not reached zero) ...
+    bsf     lclState,SPDFLG ; ... else set speed state to special
 
 SpeedEnd
 
@@ -688,23 +734,20 @@ SpeedEnd
     goto    NxtBlkEnd       ; ... else ignore received data
 
     comf    telemData,W     ; Store (original) received data ...
-    movwf   nxtState        ; ... as next signal status
-
-    movlw   NEXTTIMEOUT     ; Reset next signal ...
-    movwf   nxtLnkTmr       ; ... link timeout
+    movwf   rmtState        ; ... as next signal status
 
     ; If next signal link is not timed out then ignore inhibit input
-    bcf     sigState,INHFLG ; Set inhibit state to off
-    movlw   0xFF
-    movwf   inhAcc          ; Reset inhibit input debounce
+    bcf     lclState,INHFLG ; Set inhibit state to off
+    clrf    inhAcc          ; Reset inhibit input for automatic free run
+    decf    inhAcc,F        ; Rollover through zero to 'full house'
 
     goto    NxtBlkEnd
 
     ; Test if next signal link has timedout, i.e. there is no next signal
 
 TimeoutNext
-    decfsz  nxtLnkTmr,W     ; Skip if link timeout elapsed ...
-    goto    NxtBlkEnd       ; ... else keep waiting for data
+    btfss   lnkNState,LNKTMOFLAG    ; Skip if link timedout ...
+    goto    NxtBlkEnd               ; ... else keep waiting for data
 
     ; Next signal link timed out, check status of inhibit input (active low)
 
@@ -719,7 +762,7 @@ TimeoutNext
 
     andlw   INPHIGHWTR      ; Test if above off threshold
     btfss   STATUS,Z        ; Skip if not above off threshold ...
-    bcf     sigState,INHFLG ; ... else set inhibit state to off
+    bcf     lclState,INHFLG ; ... else set inhibit state to off
     goto    InhibitEnd   
 
 DecInhAcc
@@ -728,28 +771,28 @@ DecInhAcc
     btfss   STATUS,Z        ; Skip if reached zero ...
     movwf   inhAcc          ; ... else  update the accumulator
 
-    btfsc   STATUS,Z        ; Skip if above on threshold ...
-    bsf     sigState,INHFLG ; ... else set inhibit state to on
+    btfsc   STATUS,Z        ; Skip if above on threshold (not reached zero) ...
+    bsf     lclState,INHFLG ; ... else set inhibit state to on
 
 InhibitEnd
 
-    ; Link to next signal timedout so simulate next signal
+    ; Link to next signal timedout, simulate next signal
 
     decfsz  nxtTimer,W      ; Test if signalling timer elapsed ...
     goto    NxtBlkEnd       ; ... else skip next signal sequencing
 
-    btfss   nxtState,DETFLG ; Skip if next detection on ...
-    goto    SequenceNxtBlk  ; ... sequence next signal aspect
+    btfss   rmtState,DETFLG ; Skip if next detection on ...
+    goto    SequenceNxtBlk  ; ... else sequence next signal aspect
 
-    bcf     nxtState,DETFLG ; Set simulated next signal train detection off
+    bcf     rmtState,DETFLG ; Set simulated next signal train detection off
     goto    DelayNxtBlk
 
 SequenceNxtBlk
     ; Time to simulate next signal changing aspect
     movlw   ASPINCR
-    addwf   nxtState,W      ; Increment to next aspect value
+    addwf   rmtState,W      ; Increment to next aspect value
     btfss   STATUS,C        ; Skip if overflow, already showing 'green' ...
-    movwf   nxtState        ; ... else store new aspect value
+    movwf   rmtState        ; ... else store new aspect value
 
 DelayNxtBlk
     ; Load signalling timer for the duration of the new aspect
@@ -757,7 +800,6 @@ DelayNxtBlk
     movwf   nxtTimer
 
 NxtBlkEnd   ; End of simulation of next signal.
-
 
     ; Run this signal block state machine
     ; The signal aspect to display and exit of a train from the signal block
@@ -767,8 +809,8 @@ NxtBlkEnd   ; End of simulation of next signal.
 
     movlw   high BlockTable ; Load jump table address high byte ...
     movwf   PCLATH          ; ... into PCLATH to make jump in same code block
-    movf    sigState,W      ; Use current state value ...
-    andlw   BLKSTATE
+    movf    lclState,W      ; Use current state value ...
+    andlw   BLKSTATE        ; ... (after removing flag and aspect bits) ...
     addwf   PCL,F           ; ... as offset into state jump table
 
 BlockTable
@@ -794,83 +836,87 @@ BlockClear
     ; Green            Green
 
     movlw   ~ASPSTATE
-    andwf   sigState,F      ; Clear current aspect value bits
+    andwf   lclState,F      ; Clear current aspect value bits
+
     movlw   ASPINCR
-    addwf   nxtState,W      ; Increment next signal aspect value into W
+    addwf   rmtState,W      ; Increment next signal aspect value into W
     btfsc   STATUS,C        ; Skip if no overflow ...
     movlw   ASPGREEN        ; ... else set for green aspect
     andlw   ASPSTATE        ; Isolate new aspect value bits   
-    iorwf   sigState,F      ; Set new aspect value
+
+    iorwf   lclState,F      ; Set new aspect value
 
 BlockDetect
     ; Test the state of the train detection for this signal.  If on set the
     ; state of this signal to "Train entering block" and the displayed signal
     ; aspect to "Red".
 
-    btfss   sigState,DETFLG ; Skip if detection on ...
+    btfss   lclState,DETFLG ; Skip if detection on ...
     goto    BlockEnd        ; ... else remain in current state
 
     ; Train detected at block entrance, set signal state to "Train entering
     ; block" and set signal aspect value to 'red'.
     movlw   ~(BLKSTATE | ASPSTATE)
-    andwf   sigState,W
+    andwf   lclState,W
     iorlw   TRAINENTERING
-    movwf   sigState
+    movwf   lclState
 
 
 TrainEntering
     ; State = "Train entering block"
 
-    btfsc   sigState,DETFLG ; Skip if detection off ...
+    btfsc   lclState,DETFLG ; Skip if detection off ...
     goto    BlockEnd        ; ... else remain in current state
 
     ; Train no longer detected at block entrance, set signal state to "Block
     ; occupied".
     movlw   ~BLKSTATE
-    andwf   sigState,W
+    andwf   lclState,W
     iorlw   BLOCKOCCUPIED
-    movwf   sigState
+    movwf   lclState
 
-    decfsz  nxtLnkTmr,W     ; Skip if link timeout elapsed ...
-    goto    BlockOccupied   ; ... else skip simulation of next signal
+
+BlockOccupied
+    ; State = "Block occupied".
+
+    btfss   lnkNState,LNKTMOFLAG    ; Skip if link timedout ...
+    goto    NextBlockLive           ; ... else skip simulation of next signal
 
     ; Link to next signal timedout so simulate next signal
 
     movlw   ~ASPSTATE
-    andwf   nxtState,F      ; Clear next signal aspect value bits (= red)
-    bsf     nxtState,DETFLG ; Set simulated next signal train detection on
+    andwf   rmtState,F      ; Clear next signal aspect value bits (= red)
+
+    bsf     rmtState,DETFLG ; Set simulated next signal train detection on
 
     ; Load signalling timer to simulate time taken by train to traverse the
     ; simulated next signal block
     movf    aspectTime,W
     movwf   nxtTimer
 
-
-BlockOccupied
-    ; State = "Block occupied".
-
-    btfss   nxtState,DETFLG ; Skip if next detection on ...
+NextBlockLive
+    btfss   rmtState,DETFLG ; Skip if next detection on ...
     goto    BlockEnd        ; ... else remain in current state
 
     ; Train detected at block exit, set signal state to "Train leaving block".
     movlw   ~BLKSTATE
-    andwf   sigState,W
+    andwf   lclState,W
     iorlw   TRAINLEAVING
-    movwf   sigState
+    movwf   lclState
 
 
 TrainLeaving
     ; State ="Train leaving block".
 
-    btfsc   nxtState,DETFLG   ; Skip if next detection off ...
+    btfsc   rmtState,DETFLG   ; Skip if next detection off ...
     goto    BlockEnd          ; ... else remain in current state
 
     ; Train no longer detected at block exit, set signal state to "Block
     ; clear".
     movlw   ~BLKSTATE
-    andwf   sigState,W
+    andwf   lclState,W
     iorlw   BLOCKCLEAR
-    movwf   sigState
+    movwf   lclState
 
 BlockEnd    ; End of signal block state machine.
 
@@ -881,11 +927,11 @@ BlockEnd    ; End of signal block state machine.
     movwf   pwmDutyN
     movwf   pwmDutyM
 
-    btfsc   sigState,INHFLG ; Skip if not a forced red aspect display ...
+    btfsc   lclState,INHFLG ; Skip if not a forced red aspect display ...
     goto    AspectEnd       ; ... else display red aspect
 
     movlw   ASPSTATE        ; Test for red aspect required
-    andwf   sigState,W
+    andwf   lclState,W
     btfsc   STATUS,Z        ; Skip if not zero (not red) ...
     goto    AspectEnd       ; ... else display red aspect
 
@@ -906,8 +952,8 @@ GreenAspect
     ; Display green aspect - clear
     movf    grnDuty,W
 
-    btfss   sigState,SPDFLG   ; Skip if signal at medium speed ...
-    btfss   nxtState,SPDFLG   ; ... else skip if 'next' at medium speed ...
+    btfss   lclState,SPDFLG   ; Skip if signal at medium speed ...
+    btfss   rmtState,SPDFLG   ; ... else skip if 'next' at medium speed ...
     goto    SetAspect         ; ... else display aspect as usual
 
     ; Next signal at 'medium speed' so display 'reduce to medium speed'
@@ -917,9 +963,9 @@ GreenAspect
     goto    AspectEnd
 
 SetAspect
-    btfss   sigState,SPDFLG   ; Skip if signal at medium speed ...
+    btfss   lclState,SPDFLG   ; Skip if signal at medium speed ...
     movwf   pwmDutyN          ; ... else set normal aspect
-    btfsc   sigState,SPDFLG   ; Skip if signal at normal speed...
+    btfsc   lclState,SPDFLG   ; Skip if signal at normal speed...
     movwf   pwmDutyM          ; ... else set medium aspect
 
 AspectEnd   ; End of aspect display output
@@ -927,9 +973,9 @@ AspectEnd   ; End of aspect display output
     ; Send status to previous signal
 
     ; Encode status
-    swapf   sigState,W      ; Copy status but with nibbles swapped
+    swapf   lclState,W      ; Copy status but with nibbles swapped
 
-    btfsc   sigState,INHFLG ; Skip if not forced red aspect display ...
+    btfsc   lclState,INHFLG ; Skip if not forced red aspect display ...
     andlw   ~ASPSTSWP       ; ... else report aspect as red
 
     movwf   telemData
@@ -937,10 +983,10 @@ AspectEnd   ; End of aspect display output
     andlw   0x0F            ; Isolate aspect, detection, and speed (swapped)
     movwf   telemData
 
-    movf    sigState,W
+    movf    lclState,W
     andlw   0xF0            ; Isolate aspect, detection, and speed (unswapped)
 
-    btfsc   sigState,INHFLG ; Skip if not forced red aspect display ...
+    btfsc   lclState,INHFLG ; Skip if not forced red aspect display ...
     andlw   ~ASPSTATE       ; ... else report aspect as red
 
     iorwf   telemData,W     ; Combine complemented and uncomplemented data
