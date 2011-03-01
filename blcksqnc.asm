@@ -68,6 +68,19 @@
 
 
 ;**********************************************************************
+; Macro definitions                                                   *
+;**********************************************************************
+MaxIns      macro   arg1, arg2, instr
+
+#if (arg1 > arg2)
+    instr   arg1
+#else
+    instr   arg2
+#endif
+
+    endm
+
+;**********************************************************************
 ; Constant definitions                                                *
 ;**********************************************************************
 
@@ -76,38 +89,43 @@ PORTASTATUS EQU     B'00001000'
 PORTBSTATUS EQU     B'00001011'
 
 ; Interrupt & timing constants
-RTCCINT     EQU     158         ; 10KHz = (1MHz / 100) - RTCC write inhibit (2)
+RTCCINT     EQU     160         ; 10KHz = (1MHz / 100)
 
-INTSERBIT   EQU     4           ; Interrupts per serial bit @ 2K5 baud
 INTSERINI   EQU     6           ; Interrupts per initial Rx serial bit @ 2K5
-INTLINKDEL  EQU     0           ; Interrupt cycles for link turnaround delays
+INTSERBIT   EQU     4           ; Interrupts per serial bit @ 2K5 baud
+INTLNKDLYRX EQU     7           ; Interrupt cycles for link Rx turnaround delay
+INTLNKDLYTX EQU     5           ; Interrupt cycles for link Tx turnaround delay
 INTLINKTMO  EQU     100         ; Interrupt cycles for link Rx idle timeout
 
 ; Next signal serial interface constants (see 'asyn_srl.inc')
-RXNFLAG     EQU     0           ; Receive byte buffer 'loaded' status bit
+RXNFLG      EQU     0           ; Receive byte buffer 'loaded' status bit
 RXNERR      EQU     1           ; Receive error status bit
 RXNBREAK    EQU     2           ; Received 'break' status bit
-RXNSTOP     EQU     2           ; Seeking stop bit
+RXNSTOP     EQU     3           ; Seeking stop bit status bit
 RXNTRIS     EQU     TRISB       ; Rx port direction register
 RXNPORT     EQU     PORTB       ; Rx port data register
 RXNBIT      EQU     1           ; Rx input bit
-TXNFLAG     EQU     0           ; Transmit byte buffer 'clear' status bit
-TXNTRIS     EQU     TRISA       ; Tx port direction register
-TXNPORT     EQU     PORTA       ; Tx port data register
-TXNBIT      EQU     1           ; Tx output bit
+
+TXNFLG      EQU     RXNFLG      ; Transmit byte buffer 'clear' status bit
+TXNBREAK    EQU     RXNBREAK    ; Send 'break' status bit
+TXNTRIS     EQU     TRISB       ; Tx port direction register
+TXNPORT     EQU     PORTB       ; Tx port data register
+TXNBIT      EQU     RXNBIT      ; Tx output bit
 
 ; Previous signal serial interface constants (see 'asyn_srl.inc')
-RXPFLAG     EQU     3           ; Receive byte buffer 'loaded' status bit
-RXPERR      EQU     4           ; Receive error status bit
-RXPBREAK    EQU     5           ; Received 'break' status bit
-RXPSTOP     EQU     2           ; Seeking stop bit
+RXPFLG      EQU     4           ; Receive byte buffer 'loaded' status bit
+RXPERR      EQU     5           ; Receive error status bit
+RXPBREAK    EQU     6           ; Received 'break' status bit
+RXPSTOP     EQU     7           ; Seeking stop bit
 RXPTRIS     EQU     TRISB       ; Rx port direction register
 RXPPORT     EQU     PORTB       ; Rx port data register
 RXPBIT      EQU     2           ; Rx input bit
-TXPFLAG     EQU     3           ; Transmit byte buffer 'clear' status bit
+
+TXPFLG      EQU     RXPFLG      ; Transmit byte buffer 'clear' status bit
+TXPBREAK    EQU     RXPBREAK    ; Send 'break' status bit
 TXPTRIS     EQU     TRISB       ; Tx port direction register
 TXPPORT     EQU     PORTB       ; Tx port data register
-TXPBIT      EQU     2           ; Tx output bit
+TXPBIT      EQU     RXPBIT      ; Tx output bit
 
 ; Timing constants
 INTSCLNG    EQU     80 + 1      ; Interrupts scaling for seconds
@@ -115,46 +133,57 @@ SECSCLNG    EQU     125         ; Scaled interrupts per second
 HALFSEC     EQU     B'11000000' ; Roughly half second scaled interrupts mask
 
 ; Detector I/O constants
-EMTPORT         EQU     PORTA   ; Emitter drive port
-EMTBIT          EQU     2       ; Emmitter drive bit (active low)
-SNSPORT         EQU     PORTA   ; Sensor input port
-SNSBIT          EQU     3       ; Sensor input bit (active high)
-DETPORT         EQU     PORTA   ; Detection indicator port
-DETBIT          EQU     4       ; Detection indicator bit (active low)
+EMTPORT     EQU     PORTA       ; Emitter drive port
+EMTBIT      EQU     2           ; Emmitter drive bit (active low)
+SNSPORT     EQU     PORTA       ; Sensor input port
+SNSBIT      EQU     3           ; Sensor input bit (active high)
+DETPORT     EQU     PORTA       ; Detection indicator port
+DETBIT      EQU     4           ; Detection indicator bit (active low)
 
 ; Inhibit (force display of red aspect) input constants
-INHPORT         EQU     PORTB   ; Inhibit input port
-INHBIT          EQU     1       ; Inhibit input bit (active low)
+INHPORT     EQU     PORTB       ; Inhibit input port
+INHBIT      EQU     1           ; Inhibit input bit (active low)
 
 ; Special speed input constants
-SPDPORT         EQU     PORTB   ; Special speed input port
-SPDBIT          EQU     3       ; Special speed input bit (active low)
+SPDPORT     EQU     PORTB       ; Special speed input port
+SPDBIT      EQU     3           ; Special speed input bit (active low)
 
-INPHIGHWTR      EQU     B'11111000' ; Input debounce on threshold mask
+INPHIGHWTR  EQU     B'11111000' ; Input debounce on threshold mask
 
 ; Signalling status constants
-BLKSTATE        EQU     B'00000011' ; Mask to isolate signal block state bits
+BLKSTATE    EQU     B'00000011' ; Mask to isolate signal block state bits
+
+; Communications state values
+
+PRXFLG      EQU     0           ; Listen to previous signal
+PRXSTATE    EQU     B'00000001' ; Inhibit state bit mask
+
+NTXFLG      EQU     1           ; Send to next signal
+NTXSTATE    EQU     B'00000001' ; Inhibit state bit mask
 
 ; State values, 'this' block
-BLOCKCLEAR      EQU     0           ; Block clear state value
-TRAINENTERING   EQU     1           ; Train entering block state value
-BLOCKOCCUPIED   EQU     2           ; Block occupied state value
-TRAINLEAVING    EQU     3           ; Train leaving block state value
+BLOCKCLEAR     EQU     0        ; Block clear state value
+TRAINENTERING  EQU     1        ; Train entering block state value
+BLOCKOCCUPIED  EQU     2        ; Block occupied state value
+TRAINLEAVING   EQU     3        ; Train leaving block state value
 
-ASPSTATE        EQU     B'11000000' ; Aspect value mask
-ASPSTSWP        EQU     B'00001100' ; Swapped nibbles aspect value mask
-ASPINCR         EQU     B'01000000' ; Aspect value increment
-ASPGREEN        EQU     B'11000000' ; Green aspect value
-ASPDOUBLE       EQU     B'10000000' ; Double yellow aspect value mask
+ASPSTATE    EQU     B'11000000' ; Aspect value mask
+ASPSTSWP    EQU     B'00001100' ; Swapped nibbles aspect value mask
+ASPINCR     EQU     B'01000000' ; Aspect value increment
+ASPGREEN    EQU     B'11000000' ; Green aspect value
+ASPDOUBLE   EQU     B'10000000' ; Double yellow aspect value mask
 
-INHFLG          EQU     3           ; Inhibit bit in status byte
-INHSTATE        EQU     B'00001000' ; Inhibit state bit mask
+REDDUTY     EQU     0xFF        ; PWM duty cycle for red aspect
+GRNDUTY     EQU     0           ; PWM duty cycle for green aspect
 
-SPDFLG          EQU     4           ; Special speed bit in status byte
-SPDSTATE        EQU     B'00010000' ; Special speed state bit mask
+INHFLG      EQU     3           ; Inhibit bit in status byte
+INHSTATE    EQU     B'00001000' ; Inhibit state bit mask
 
-DETFLG          EQU     5           ; Train detection bit in status byte
-DETSTATE        EQU     B'00100000' ; Train detection state bit mask
+SPDFLG      EQU     4           ; Special speed bit in status byte
+SPDSTATE    EQU     B'00010000' ; Special speed state bit mask
+
+DETFLG      EQU     5           ; Train detection bit in status byte
+DETSTATE    EQU     B'00100000' ; Train detection state bit mask
 
 ; Aspect output constants
 ASPPORT         EQU     PORTB       ; Aspect output port
@@ -181,62 +210,70 @@ srlIfStat       ; Serial I/F status flags (see 'asyn_srl.inc')
                 ;  Next link (half duplex so Rx and Tx flags share bits)
                 ;  =====================================================
                 ;
-                ;   bit 0 - Rx buffer 'loaded', Tx buffer 'clear'
+                ;   bit 0 - Rx buffer full, Tx buffer clear
                 ;   bit 1 - Rx error
-                ;   bit 2 - Received 'break'
+                ;   bit 2 - Received break
                 ;   bit 3 - Seeking stop bit
                 ;
                 ;  Previous link (half duplex so Rx and Tx flags share bits)
                 ;  =========================================================
                 ;
-                ;   bit 4 - Rx buffer 'loaded', Tx buffer 'clear'
+                ;   bit 4 - Rx buffer full, Tx buffer clear
                 ;   bit 5 - Rx error
-                ;   bit 6 - Received 'break'
+                ;   bit 6 - Received break
                 ;   bit 7 - Seeking stop bit
 
 ; Next signal interface
-serNTmr         ; Interrupt counter for serial bit timing
-serNReg         ; Data shift register
-serNByt         ; Data byte buffer
+serNTimer       ; Interrupt counter for serial bit timing
 serNBitCnt      ; Bit down counter
+serNReg         ; Data shift register
+serNBffr        ; Data byte buffer
+
+lnkNTimer       ; Rx timeout timer
 lnkNState       ; Link state register (see 'link_hd.inc')
                 ;   bit 0,3 - Current state
                 ;     0 - Switching to Rx
-                ;     1 - Waiting for interface to 'settle'
-                ;     2 - Rx Idle
-                ;     3 - Receiving data
+                ;     1 - Waiting for interface lines to settle
+                ;     2 - Receiving data
+                ;     3 - Unused
                 ;     4 - Switching to Tx
-                ;     5 - Waiting for far end to 'turn around'
-                ;     6 - Waiting for interface to 'settle'
-                ;     7 - Dummy state, go to Tx Idle
-                ;     8 - Tx idle
+                ;     5 - Waiting for far end to turn around
+                ;     6 - Waiting for interface lines to settle
+                ;     7 - Unused
+                ;          'Active' Tx states must be in the range 8 to 15
+                ;     8 - Transmiting break
                 ;     9 - Transmiting data
-                ;   bit 4,5 - Unused
-                ;   bit 6   - Rx idle timedout without receiving any data
-                ;   bit 7   - Required direction, set = Tx, clear = Rx
+                ;   bit 4 - Tx enabled
+                ;   bit 5 - Rx enabled
+                ;   bit 6 - Synchronise, Tx or Rx a break
+                ;   bit 7 - Required direction, set = Tx, clear = Rx
 
 ; Previous signal interface
-serPTmr         ; Interrupt counter for serial bit timing
-serPReg         ; Data shift register
-serPByt         ; Data byte buffer
+serPTimer       ; Interrupt counter for serial bit timing
 serPBitCnt      ; Bit down counter
+serPReg         ; Data shift register
+serPBffr        ; Data byte buffer
+
+lnkPTimer       ; Rx timeout timer
 lnkPState       ; Link state register (see 'link_hd.inc')
                 ;   bit 0,3 - Current state
                 ;     0 - Switching to Rx
-                ;     1 - Waiting for interface to 'settle'
-                ;     2 - Rx Idle
-                ;     3 - Receiving data
+                ;     1 - Waiting for interface lines to settle
+                ;     2 - Receiving data
+                ;     3 - Unused
                 ;     4 - Switching to Tx
-                ;     5 - Waiting for far end to 'turn around'
-                ;     6 - Waiting for interface to 'settle'
-                ;     7 - Dummy state, go to Tx Idle
-                ;     8 - Tx idle
+                ;     5 - Waiting for far end to turn around
+                ;     6 - Waiting for interface lines to settle
+                ;     7 - Unused
+                ;          'Active' Tx states must be in the range 8 to 15
+                ;     8 - Transmiting break
                 ;     9 - Transmiting data
-                ;   bit 4,5 - Unused
-                ;   bit 6   - Rx idle timedout without receiving any data
-                ;   bit 7   - Required direction, set = Tx, clear = Rx
+                ;   bit 4 - Tx enabled
+                ;   bit 5 - Rx enabled
+                ;   bit 6 - Synchronise, Tx or Rx a break
+                ;   bit 7 - Required direction, set = Tx, clear = Rx
 
-intScCount       ; Interrupt scaling counter for second timing
+intScCount      ; Interrupt scaling counter for second timing
 secCount        ; Scaled interrupts counter for second timing
 
 snsAcc          ; Detector sensor match (emitter state) accumulator
@@ -244,6 +281,11 @@ snsAcc          ; Detector sensor match (emitter state) accumulator
 detAcc          ; Detection input debounce accumulator
 inhAcc          ; Inhibit input debounce accumulator
 spdAcc          ; Speed input debounce accumulator
+
+cmsState        ; Communications states register
+                ;   bit 0 - Listen to previous signal (default is to send)
+                ;   bit 1 - Send to next signal (default is to listen)
+                ;   bit 2,7 - Unused
 
 lclState        ; Local signalling status
                 ;   bits 0,1 - Signal block state
@@ -261,14 +303,18 @@ lclState        ; Local signalling status
                 ;     2 - Double Yellow
                 ;     3 - Green
 
-rmtState        ; Remote signalling status
-                ;
-                ;   From previous signal
-                ;   ====================
+nxtState        ; Remote signalling status from next signal
                 ;   bits 0,3 - Unused
-                ;
-                ;   From next signal
-                ;   ================
+                ;   bit 4 - Special speed
+                ;   bit 5 - Detection state
+                ;   bits 6,7 - Aspect value
+                ;     0 - Red
+                ;     1 - Yellow
+                ;     2 - Double Yellow
+                ;     3 - Green
+
+prvState        ; Remote signalling status from previous signal
+                ;   bits 0,3 - Unused
                 ;   bit 4 - Special speed
                 ;   bit 5 - Detection state
                 ;   bits 6,7 - Aspect value
@@ -279,11 +325,11 @@ rmtState        ; Remote signalling status
 
 aspectTime      ; Aspect interval for simulating next signal
 nxtTimer        ; Second counter for simulating next signal
-telemData       ; Data received from next or sent to previous signal
+telemData       ; Data exchanged with next and previous signals
+telemPrv        ; Data last received from previous signal
+telemNxt        ; Data last received from next signal
 
-redDuty         ; PWM duty cycle for red aspect
 ylwDuty         ; PWM duty cycle for yellow aspect
-grnDuty         ; PWM duty cycle for green aspect
 pwmAccN         ; PWM accumulator for 'normal speed' aspects
 pwmDutyN        ; Current PWM duty cycle for 'normal speed' aspects
 pwmAccM         ; PWM accumulator for 'medium speed' aspects
@@ -299,9 +345,7 @@ pwmDutyM        ; Current PWM duty cycle for 'medium speed' aspects
             ORG     0x2100  ; EEPROM data area
 
 EEaspectTime    DE  6       ; Seconds to delay between aspect changes
-EEredDuty       DE  0xFF    ; PWM duty cycle value for red aspect
 EEylwDuty       DE  0x50    ; PWM duty cycle value for yellow aspect
-EEgrnDuty       DE  0x00    ; PWM duty cycle value for green aspect
 
 
 ;**********************************************************************
@@ -337,11 +381,50 @@ IntVector
 
     ; Re-enable the timer interrupt and reload the timer
     bcf     INTCON,T0IF     ; Reset the RTCC Interrupt bit
-    movlw   RTCCINT
+    movlw   (RTCCINT - 2)   ; Allow 2 cycles for RTCC write inhibit
     addwf   TMR0,F          ; Reload RTCC
 
-	call    SrvcLinkN       ; Service next signal link
-	call    SrvcLinkP       ; Service previous signal link
+    ; Service next signal link
+
+    decfsz  serNTimer,W     ; Decrement serial timing counter, skip if zero ...
+    movwf   serNTimer       ; ... else update the counter
+
+    btfss   lnkNState,LNKRXFLG
+    goto    linkNNotRx
+
+    decfsz  lnkNTimer,W     ; Decrement Rx timeout counter, skip if zero ...
+    movwf   lnkNTimer       ; ... else update the counter
+
+    call    SrvcRxN         ; Service link serial reception
+    xorlw   RX_BUSY         ; Test if receiving data
+    movlw   (INTLINKTMO + 1)
+    btfsc   STATUS,Z        ; Skip if not receiving data ...
+    movwf   lnkNTimer       ; ... else reload the Rx timeout counter
+
+linkNNotRx
+    btfsc   lnkNState,LNKTXFLG
+    call    SrvcTxN         ; Service link serial transmission
+
+    ; Service previous signal link
+
+    decfsz  serPTimer,W     ; Decrement serial timing counter, skip if zero ...
+    movwf   serPTimer       ; ... else update the counter
+
+    btfss   lnkPState,LNKRXFLG
+    goto    linkPNotRx
+
+    decfsz  lnkPTimer,W     ; Decrement Rx timeout counter, skip if zero ...
+    movwf   lnkPTimer       ; ... else update the counter
+
+    call    SrvcRxP         ; Service link serial reception
+    xorlw   RX_BUSY         ; Test if receiving data
+    movlw   (INTLINKTMO + 1)
+    btfsc   STATUS,Z        ; Skip if not receiving data ...
+    movwf   lnkPTimer       ; ... else reload the Rx timeout counter
+
+linkPNotRx
+    btfsc   lnkPState,LNKTXFLG
+    call    SrvcTxP         ; Service link serial transmission
 
     ; Run interrupt scaling counter for second timing
     decfsz  intScCount,W    ; Decrement interrupt scaling counter into W
@@ -411,28 +494,31 @@ EndISR
 EnableRxN   EnableRx  RXNTRIS, RXNPORT, RXNBIT
     return
 
-InitRxN     InitRx  serNTmr, srlIfStat, RXNFLAG, RXNERR, RXNBREAK, RXNSTOP
+InitRxN     InitRx  srlIfStat, serNTimer, serNBitCnt, serNReg, RXNFLG, RXNERR, RXNBREAK, RXNSTOP
     return
 
-SrvcRxN     ServiceRx serNTmr, RXNPORT, RXNBIT, serNBitCnt, INTSERINI, srlIfStat, RXNERR, RXNBREAK, RXNSTOP, serNReg, serNByt, RXNFLAG, INTSERBIT
+SrvcRxN     ServiceRx srlIfStat, serNTimer, serNBitCnt, serNReg, serNBffr, RXNPORT, RXNBIT, INTSERINI, INTSERBIT, RXNERR, RXNBREAK, RXNSTOP, RXNFLG
 
-SerRxN      SerialRx srlIfStat, RXNFLAG, serNByt
+SerRxN      SerialRx srlIfStat, serNBffr, RXNFLG
 
 EnableTxN   EnableTx  TXNTRIS, TXNPORT, TXNBIT
     return
 
-InitTxN     InitTx  serNTmr, srlIfStat, TXNFLAG
+InitTxN     InitTx  srlIfStat, serNTimer, serNBitCnt, serNReg, TXNFLG, TXNBREAK
     return
 
-SrvcTxN     ServiceTx serNTmr, srlIfStat, serNByt, serNReg, TXNFLAG, serNBitCnt, INTSERBIT, TXPPORT, TXPBIT, RXNPORT, RXNBIT
+SrvcTxN     ServiceTx srlIfStat, serNTimer, serNBitCnt, serNReg, serNBffr, TXNPORT, TXNBIT, RXNPORT, RXNBIT, INTSERBIT, TXNFLG, TXNBREAK
 
-SerTxN      SerialTx srlIfStat, TXNFLAG, serNByt
+SerTxN      SerialTx srlIfStat, serNBffr, TXNFLG
 
-LinkRxN		LinkRx lnkNState, SerRxN
+IsTxIdleN   IsTxIdle serNBitCnt
+    return
 
-LinkTxN		LinkTx lnkNState, SerTxN
+SrvcLinkN   SrvcLink   lnkNState, lnkNTimer, serNTimer, INTLNKDLYRX, INTLNKDLYTX, INTLINKTMO, EnableTxN, InitTxN, IsTxIdleN, EnableRxN, InitRxN
 
-SrvcLinkN	SrvcLink   SrvcRxN, SrvcTxN, lnkNState, INTLINKDEL, INTLINKTMO, serNTmr, EnableTxN, InitTxN, EnableRxN, InitRxN
+LinkRxN     LinkRx lnkNState, SerRxN
+
+LinkTxN     LinkTx lnkNState, SerTxN
 
 
 ;**********************************************************************
@@ -442,28 +528,31 @@ SrvcLinkN	SrvcLink   SrvcRxN, SrvcTxN, lnkNState, INTLINKDEL, INTLINKTMO, serNTm
 EnableRxP   EnableRx  RXPTRIS, RXPPORT, RXPBIT
     return
 
-InitRxP     InitRx  serPTmr, srlIfStat, RXPFLAG, RXPERR, RXPBREAK, RXPSTOP
+InitRxP     InitRx  srlIfStat, serPTimer, serPBitCnt, serPReg, RXPFLG, RXPERR, RXPBREAK, RXPSTOP
     return
 
-SrvcRxP     ServiceRx serPTmr, RXPPORT, RXPBIT, serPBitCnt, INTSERINI, srlIfStat, RXPERR, RXPBREAK, RXPSTOP, serPReg, serPByt, RXPFLAG, INTSERBIT
+SrvcRxP     ServiceRx srlIfStat, serPTimer, serPBitCnt, serPReg, serPBffr, RXPPORT, RXPBIT, INTSERINI, INTSERBIT, RXPERR, RXPBREAK, RXPSTOP, RXPFLG
 
-SerRxP      SerialRx srlIfStat, RXPFLAG, serPByt
+SerRxP      SerialRx srlIfStat, serPBffr, RXPFLG
 
 EnableTxP   EnableTx  TXPTRIS, TXPPORT, TXPBIT
     return
 
-InitTxP     InitTx  serPTmr, srlIfStat, TXPFLAG
+InitTxP     InitTx  srlIfStat, serPTimer, serPBitCnt, serPReg, TXPFLG, TXPBREAK
     return
 
-SrvcTxP     ServiceTx serPTmr, srlIfStat, serPByt, serPReg, TXPFLAG, serPBitCnt, INTSERBIT, TXPPORT, TXPBIT, RXPPORT, RXPBIT
+SrvcTxP     ServiceTx srlIfStat, serPTimer, serPBitCnt, serPReg, serPBffr, TXPPORT, TXPBIT, RXPPORT, RXPBIT, INTSERBIT, TXPFLG, TXPBREAK
 
-SerTxP      SerialTx srlIfStat, TXPFLAG, serPByt
+SerTxP      SerialTx srlIfStat, serPBffr, TXPFLG
 
-LinkRxP		LinkRx lnkPState, SerRxP
+IsTxIdleP   IsTxIdle serPBitCnt
+    return
 
-LinkTxP		LinkTx lnkPState, SerTxP
+SrvcLinkP   SrvcLink   lnkPState, lnkPTimer, serPTimer, INTLNKDLYRX, INTLNKDLYTX, INTLINKTMO, EnableTxP, InitTxP, IsTxIdleP, EnableRxP, InitRxP
 
-SrvcLinkP	SrvcLink   SrvcRxP, SrvcTxP, lnkPState, INTLINKDEL, INTLINKTMO, serPTmr, EnableTxP, InitTxP, EnableRxP, InitRxP
+LinkRxP     LinkRx lnkPState, SerRxP
+
+LinkTxP     LinkTx lnkPState, SerTxP
 
 
 ;**********************************************************************
@@ -498,24 +587,6 @@ Boot
     bsf     EMTPORT,EMTBIT  ; Ensure detector emmitter is off
     bsf     DETPORT,DETBIT  ; Ensure detector indicator is off
 
-    ; Initialise next signal serial interface
-    SerInit    srlIfStat, serNTmr, serNReg, serNByt, serNBitCnt, serNTmr, serNReg, serNByt, serNBitCnt
-
-    ; Initialise previous signal serial interface
-    SerInit    srlIfStat, serPTmr, serPReg, serPByt, serPBitCnt, serPTmr, serPReg, serPByt, serPBitCnt
-
-    ; Initialise next signal link to receive
-    movlw   SWITCH2RXSTATE
-    movwf   lnkNState
-    bcf     lnkNState,LNKDIRFLAG
-    call    SrvcLinkN
-
-    ; Initialise previous signal link to transmit
-    movlw   SWITCH2TXSTATE
-    movwf   lnkPState
-    bsf     lnkPState,LNKDIRFLAG
-    call    SrvcLinkP
-
     ; Initialise input debounce accumulators
     clrf    snsAcc          ; Initialise sensor for clear
     incf    snsAcc,F        ; Prevent rollover down through zero
@@ -529,27 +600,20 @@ Boot
     movlw   ASPGREEN
     movwf   lclState        ; Initialise this signal to green aspect
 
-    clrf    rmtState        ; Initialise next signal to cycle to green aspect
+    clrf    nxtState        ; Clear next signal state (cycle to green aspect)
+    clrf    prvState        ; Clear previous signal state
 
     ; Initialise aspect output PWM
-    movlw   low EEredDuty
-    call    GetEEPROM
-    movwf   redDuty
-
     movlw   low EEylwDuty
     call    GetEEPROM
     movwf   ylwDuty
-
-    movlw   low EEgrnDuty
-    call    GetEEPROM
-    movwf   grnDuty
 
     clrf    pwmAccN
     clrf    pwmDutyN
     clrf    pwmAccM
     clrf    pwmDutyM
 
-    ; Initialise timers
+    ; Initialise timing
 
     movlw   INTSCLNG
     movwf   intScCount      ; Initialise interrupts scaling counter
@@ -563,6 +627,21 @@ Boot
     movwf   nxtTimer        ; Initialise timer used to simulate next signal
 
     clrf    telemData       ; Clear serial link data store
+    clrf    cmsState        ; Clear communications states register
+
+    ; Initialise next signal link to receive
+    call    InitRxN
+    movlw   SWITCH2RXSTATE
+    movwf   lnkNState
+    bcf     lnkNState,LNKDIRFLG
+    call    SrvcLinkN
+
+    ; Initialise previous signal link to transmit
+    call    InitTxP
+    movlw   SWITCH2TXSTATE
+    movwf   lnkPState
+    bsf     lnkPState,LNKDIRFLG
+    call    SrvcLinkP
 
     ; Initialise interrupts
     movlw   RTCCINT
@@ -719,7 +798,51 @@ DecSpdAcc
 
 SpeedEnd
 
+    call    SrvcLinkN       ; Service next signal link
+    call    SrvcLinkP       ; Service previous signal link
+
+    ; Look for status reply from previous signal
+
+    btfss   cmsState,PRXFLG ; Skip if waiting for reply from previous ...
+    goto    PrevRxEnd       ; ... else skip over previous signal receive
+
+    call    LinkRxP         ; Check for data from previous signal
+    btfsc   STATUS,Z        ; Skip if no data received ...
+    goto    DecodePrev      ; ... else decode received data
+
+    decfsz  lnkPTimer,W     ; Test if link timedout ...
+    goto    PrevRxEnd       ; ... skip if not timed out ...
+    bcf     cmsState,PRXFLG ; ... else resume sending to previous signal
+    goto    PrevRxEnd
+
+DecodePrev
+
+    bcf     cmsState,PRXFLG ; Resume sending to previous signal
+
+    ; New data received, decode it
+    movwf   telemData       ; Store the received data
+    swapf   telemData,W     ; Copy received data but with nibbles swapped
+    comf    telemData,F     ; One's complement the received data
+    xorwf   telemData,W     ; Exclusive or complemented and swapped data
+    btfss   STATUS,Z        ; Skip if result is zero, i.e. data is ok ...
+    goto    PrevRxEnd       ; ... else ignore received data
+
+    comf    telemData,W     ; Recover the as received data
+    xorwf   telemPrv,F      ; Test against last data received
+    movwf   telemPrv        ; Replace last data received
+    btfss   STATUS,Z        ; Skip if last and just received data match ...
+    goto    PrevRxEnd       ; ... else ignore received data
+
+    movwf   prvState        ; Save received data as previous signal status
+
+PrevRxEnd
+
+;    goto    NextTimedOut
+
     ; Look for status received from next signal
+
+    btfsc   cmsState,NTXFLG ; Skip if not replying to next signal ...
+    goto    NxtBlkEnd       ; ... else skip over next signal receive
 
     call    LinkRxN         ; Check for data from next signal
     btfss   STATUS,Z        ; Skip if data received ...
@@ -733,8 +856,15 @@ SpeedEnd
     btfss   STATUS,Z        ; Skip if result is zero, i.e. data is ok ...
     goto    NxtBlkEnd       ; ... else ignore received data
 
-    comf    telemData,W     ; Store (original) received data ...
-    movwf   rmtState        ; ... as next signal status
+    comf    telemData,W     ; Recover the as received data
+    xorwf   telemNxt,F      ; Test against last data received
+    movwf   telemNxt        ; Replace last data received
+    btfss   STATUS,Z        ; Skip if last and just received data match ...
+    goto    NxtBlkEnd       ; ... else ignore received data
+
+    movwf   nxtState        ; Save received data as next signal status
+
+    bsf     cmsState,NTXFLG ; Start replying to next signal
 
     ; If next signal link is not timed out then ignore inhibit input
     bcf     lclState,INHFLG ; Set inhibit state to off
@@ -746,9 +876,10 @@ SpeedEnd
     ; Test if next signal link has timedout, i.e. there is no next signal
 
 TimeoutNext
-    btfss   lnkNState,LNKTMOFLAG    ; Skip if link timedout ...
-    goto    NxtBlkEnd               ; ... else keep waiting for data
+    decfsz  lnkNTimer,W     ; Skip if link timedout ...
+    goto    NxtBlkEnd       ; ... else keep waiting for data
 
+NextTimedOut
     ; Next signal link timed out, check status of inhibit input (active low)
 
     btfss   INHPORT,INHBIT  ; Skip if inhibit input is set ...
@@ -781,18 +912,18 @@ InhibitEnd
     decfsz  nxtTimer,W      ; Test if signalling timer elapsed ...
     goto    NxtBlkEnd       ; ... else skip next signal sequencing
 
-    btfss   rmtState,DETFLG ; Skip if next detection on ...
+    btfss   nxtState,DETFLG ; Skip if next detection on ...
     goto    SequenceNxtBlk  ; ... else sequence next signal aspect
 
-    bcf     rmtState,DETFLG ; Set simulated next signal train detection off
+    bcf     nxtState,DETFLG ; Set simulated next signal train detection off
     goto    DelayNxtBlk
 
 SequenceNxtBlk
     ; Time to simulate next signal changing aspect
     movlw   ASPINCR
-    addwf   rmtState,W      ; Increment to next aspect value
+    addwf   nxtState,W      ; Increment to next aspect value
     btfss   STATUS,C        ; Skip if overflow, already showing 'green' ...
-    movwf   rmtState        ; ... else store new aspect value
+    movwf   nxtState        ; ... else store new aspect value
 
 DelayNxtBlk
     ; Load signalling timer for the duration of the new aspect
@@ -839,7 +970,7 @@ BlockClear
     andwf   lclState,F      ; Clear current aspect value bits
 
     movlw   ASPINCR
-    addwf   rmtState,W      ; Increment next signal aspect value into W
+    addwf   nxtState,W      ; Increment next signal aspect value into W
     btfsc   STATUS,C        ; Skip if no overflow ...
     movlw   ASPGREEN        ; ... else set for green aspect
     andlw   ASPSTATE        ; Isolate new aspect value bits   
@@ -868,8 +999,7 @@ TrainEntering
     btfsc   lclState,DETFLG ; Skip if detection off ...
     goto    BlockEnd        ; ... else remain in current state
 
-    ; Train no longer detected at block entrance, set signal state to "Block
-    ; occupied".
+    ; Train no longer at block entrance, set state to "Block Occupied".
     movlw   ~BLKSTATE
     andwf   lclState,W
     iorlw   BLOCKOCCUPIED
@@ -879,15 +1009,15 @@ TrainEntering
 BlockOccupied
     ; State = "Block occupied".
 
-    btfss   lnkNState,LNKTMOFLAG    ; Skip if link timedout ...
-    goto    NextBlockLive           ; ... else skip simulation of next signal
+    decfsz  lnkNTimer,W     ; Skip if link timedout ...
+    goto    NextBlockLive   ; ... else skip simulation of next signal
 
-    ; Link to next signal timedout so simulate next signal
+    ; Link to next signal timedout so simulate train passing next signal
 
     movlw   ~ASPSTATE
-    andwf   rmtState,F      ; Clear next signal aspect value bits (= red)
+    andwf   nxtState,F      ; Clear next signal aspect value bits (= red)
 
-    bsf     rmtState,DETFLG ; Set simulated next signal train detection on
+    bsf     nxtState,DETFLG ; Set simulated next signal train detection on
 
     ; Load signalling timer to simulate time taken by train to traverse the
     ; simulated next signal block
@@ -895,10 +1025,10 @@ BlockOccupied
     movwf   nxtTimer
 
 NextBlockLive
-    btfss   rmtState,DETFLG ; Skip if next detection on ...
+    btfss   nxtState,DETFLG ; Skip if next detection on ...
     goto    BlockEnd        ; ... else remain in current state
 
-    ; Train detected at block exit, set signal state to "Train leaving block".
+    ; Train detected at block exit, set state to "Train leaving block".
     movlw   ~BLKSTATE
     andwf   lclState,W
     iorlw   TRAINLEAVING
@@ -908,11 +1038,10 @@ NextBlockLive
 TrainLeaving
     ; State ="Train leaving block".
 
-    btfsc   rmtState,DETFLG   ; Skip if next detection off ...
-    goto    BlockEnd          ; ... else remain in current state
+    btfsc   nxtState,DETFLG ; Skip if next detection off ...
+    goto    BlockEnd        ; ... else remain in current state
 
-    ; Train no longer detected at block exit, set signal state to "Block
-    ; clear".
+    ; Train no longer detected at block exit, set state to "Block Clear".
     movlw   ~BLKSTATE
     andwf   lclState,W
     iorlw   BLOCKCLEAR
@@ -923,7 +1052,7 @@ BlockEnd    ; End of signal block state machine.
     ; Set aspect display output
 
     ; Default is to display red aspect - stop
-    movf    redDuty,W
+    movlw   REDDUTY
     movwf   pwmDutyN
     movwf   pwmDutyM
 
@@ -950,10 +1079,10 @@ BlockEnd    ; End of signal block state machine.
 DblYllAspect
 GreenAspect
     ; Display green aspect - clear
-    movf    grnDuty,W
+    movlw   GRNDUTY
 
     btfss   lclState,SPDFLG   ; Skip if signal at medium speed ...
-    btfss   rmtState,SPDFLG   ; ... else skip if 'next' at medium speed ...
+    btfss   nxtState,SPDFLG   ; ... else skip if 'next' at medium speed ...
     goto    SetAspect         ; ... else display aspect as usual
 
     ; Next signal at 'medium speed' so display 'reduce to medium speed'
@@ -970,9 +1099,8 @@ SetAspect
 
 AspectEnd   ; End of aspect display output
 
-    ; Send status to previous signal
+    ; Encode status for transmission
 
-    ; Encode status
     swapf   lclState,W      ; Copy status but with nibbles swapped
 
     btfsc   lclState,INHFLG ; Skip if not forced red aspect display ...
@@ -991,8 +1119,25 @@ AspectEnd   ; End of aspect display output
 
     iorwf   telemData,W     ; Combine complemented and uncomplemented data
 
-    movwf   FSR
+    movwf   FSR             ; Load data to be sent into FSR
+
+    btfsc   cmsState,PRXFLG ; Skip if not waiting for reply from previous ...
+    goto    PrevTxEnd       ; ... else skip over previous signal send
+
     call    LinkTxP         ; Send data to previous signal
+    btfsc   STATUS,Z        ; Skip if data was not sent ...
+    bsf     cmsState,PRXFLG ; ... else start waiting for reply from previous
+
+PrevTxEnd
+
+    btfss   cmsState,NTXFLG ; Skip if replying to next signal ...
+    goto    NextTxEnd       ; ... else skip over next signal send
+
+    call    LinkTxN         ; Send data to next signal
+    btfsc   STATUS,Z        ; Skip if data was not sent ...
+    bcf     cmsState,NTXFLG ; ... resume listening to next signal
+
+NextTxEnd
 
     goto    Main            ; End of main processing loop
 
