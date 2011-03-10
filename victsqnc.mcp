@@ -37,8 +37,8 @@ file_001=no
 file_002=no
 [FILE_INFO]
 file_000=blcksqnc.asm
-file_001=/home/chris/DEV\PROJECTS\UTILITY\PIC\ASYN_SRL.INC
-file_002=/home/chris/DEV\PROJECTS\UTILITY\PIC\MONITOR.INC
+file_001=/home/chris/Dev\projects\utility\pic\asyn_srl.inc
+file_002=/home/chris/Dev\projects\utility\pic\link_hd.inc
 [SUITE_INFO]
 suite_guid={6B3DAA78-59C1-46DD-B6AA-DBDAE4E06484}
 suite_state=generate-absolute-code

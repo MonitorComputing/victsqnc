@@ -2,20 +2,28 @@
 
 ;**********************************************************************
 ;                                                                     *
-;    Description:   Controller for Victoria Railways multi aspect     *
-;                   colour light speed signal with associated         *
-;                   positional train detector (placed after signal in *
-;                   normal running direction.                         *
-;                   Continuosly transmits displayed aspect and        *
-;                   detector state to 'previous' signal (in rear)     *
-;                   whilst listening for same from 'next' signal (in  *
-;                   advance).                                         *
-;                   If data received from 'previous' signal this is   *
-;                   used to determine section occupation.             *
-;                   If data received from 'next' signal this is used  *
-;                   to determine aspect to display.  Otherwise aspect *
-;                   to display is cycled from red to green at fixed   *
-;                   intervals once the train has passed.              *
+;    Description:   Controller for occupation block with positional   *
+;                   train detector at exit.                           *
+;                   Receives value of signal aspect to be displayed   *
+;                   along with indication of previous signal giving   *
+;                   special speed indication and block reversed from  *
+;                   next (in advance) controller.                     *
+;                   Sends train detection state to next controller.   *
+;                   Receives train detection state from previous (in  *
+;                   rear) controller which it uses as entry detector  *
+;                   for occupation block.                             *
+;                   Sends value of signal aspect (increment of local  *
+;                   value of signal aspect) along with special speed  *
+;                   along with indication of local signal giving      *
+;                   special speed indication and block reversed to    *
+;                   previous controller.                              *
+;                   If no data is received from next controller link  *
+;                   input is treated as a level input indicating      *
+;                   to display a stop aspect or to cycle aspect from  *
+;                   stop to clear at fixed intervals after the        *
+;                   passing of a train.                               *
+;                   Outputs aspect display for Australian Victoria    *
+;                   Railways 3 aspect MAS searchlight signals.        *
 ;                                                                     *
 ;    Author:        Chris White                                       *
 ;    Company:       Monitor Computing Services Ltd.                   *
@@ -179,17 +187,14 @@ TRAINENTERINGR EQU  5           ; Train entering reverse
 TRAINLEAVINGR  EQU  6           ; Train leaving reverse
 BLKSTATE       EQU  B'00000111' ; Mask to isolate block
 
-; Aspect values
-ASPRED      EQU     B'00000000' ; Red aspect value
-ASPYELLOW   EQU     B'01000000' ; Yellow aspect value mask
-ASPDOUBLE   EQU     B'10000000' ; Double yellow aspect value mask
-ASPGREEN    EQU     B'11000000' ; Green aspect value
-ASPDGFLG    EQU     7           ; Green or double yellow value flag bit
+; Aspect values (range from 0 - stop, to 3 - clear)
+ASPSTP      EQU     B'00000000' ; Stop aspect value
+ASPWRN      EQU     B'01000000' ; Warning aspect value mask
+ASPCLR2     EQU     B'10000000' ; Clear aspect value mask
+ASPCLR      EQU     B'11000000' ; Clear aspect value
+ASPDGFLG    EQU     7           ; Clear aspect value flag bit
 ASPINCR     EQU     B'01000000' ; Aspect value increment
 ASPSTATE    EQU     B'11000000' ; Aspect value mask
-
-REDDUTY     EQU     0xFF        ; PWM duty cycle for red aspect
-GRNDUTY     EQU     0           ; PWM duty cycle for green aspect
 
 ; Controller status flags
 ENTFLG      EQU     1           ; Entrance detection bit in status byte
@@ -330,10 +335,10 @@ lclCntlr        ; Status of this controller
                 ;   bit 4    - Signal inhibit (display red aspect)
                 ;   bit 5    - Exit detection
                 ;   bits 6,7 - Aspect value
-                ;     0 - Red
-                ;     1 - Yellow
-                ;     2 - Double Yellow
-                ;     3 - Green
+                ;     0 - Stop
+                ;     1 - Warning
+                ;     2 - Clear
+                ;     3 - Clear
 
 nxtCntlr        ; Status received from next controller
                 ;   bits 0,3 - Ignored (ones complement of bits 4 to 7)
@@ -926,7 +931,7 @@ NextLinkEnd
     andwf   lclCntlr,F      ; Clear signal aspect value bits
 
     movlw   ASPSTATE
-    andwf   nxtCntlr,W      ; Get signal aspect from next block controller
+    andwf   nxtCntlr,W      ; Get local signal aspect from next controller
 
     btfss   lclCntlr,INHFLG ; Skip if signal is line inhibited ...
     iorwf   lclCntlr,F      ; ... else use the signal aspect for display
@@ -940,12 +945,12 @@ NextLinkEnd
     ; Green            Green
 
     movlw   ~ASPSTATE
-    andwf   prvCntlr,F      ; Clear signal aspect value bits (= red aspect)
+    andwf   prvCntlr,F      ; Clear signal aspect value bits (= stop aspect)
 
     movlw   ASPINCR
     addwf   lclCntlr,W      ; Increment local signal aspect value into W
     btfsc   STATUS,C        ; Skip if no overflow ...
-    movlw   ASPGREEN        ; ... else set for green aspect
+    movlw   ASPCLR          ; ... else set for clear aspect
     andlw   ASPSTATE        ; Isolate new aspect value bits   
 
     btfss   nxtCntlr,REVFLG ; Skip if next block is line reversed ...
@@ -1052,7 +1057,7 @@ TrainLeavingF   ; State 3 - Train leaving forward
     ; In case simulating next controller set next signal aspect value to red
     ; and reset the aspect timer to simulate train traversing next block
     movlw   ~ASPSTATE
-    andwf   lclCntlr,F      ; Ensure local signal continues to display red
+    andwf   lclCntlr,F      ; Ensure local signal continues to display stop
     andwf   nxtCntlr,F
 
     movf    aspectTime,W
@@ -1135,11 +1140,11 @@ TrainLeavingR   ; State 6 - Train leaving reverse
 
 BothOccupied ; End of block state machine, next & this blocks occupied
     movlw   ~ASPSTATE
-    andwf   lclCntlr,F      ; Clear next block's signal aspect value (= red)
+    andwf   lclCntlr,F      ; Clear next block's signal aspect value (= stop)
 
 BlockOccupied ; End of block state machine, this block occupied
     movlw   ~ASPSTATE
-    andwf   prvCntlr,F      ; Clear this block's signal aspect value (= red)
+    andwf   prvCntlr,F      ; Clear this block's signal aspect value (= stop)
 
 BlockEnd    ; End of signal block state machine
 
