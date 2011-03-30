@@ -56,7 +56,7 @@ enable=0
 transport=0
 format=0
 [CUSTOM_BUILD]
-Pre-Build=
+Pre-Build=cmd /d /c "del victsqnc.hex"
 Pre-BuildEnabled=1
-Post-Build=
+Post-Build=cmd /d /c "copy blcksqnc.hex victsqnc.hex /v /y"
 Post-BuildEnabled=1
