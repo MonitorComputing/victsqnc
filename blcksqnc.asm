@@ -1,5 +1,3 @@
-; $Id$
-
 ;**********************************************************************
 ;                                                                     *
 ;    Description:   Controller for occupation block with positional   *
