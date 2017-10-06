@@ -70,9 +70,9 @@
 ; Include and configuration directives
 ;**********************************************************************
 
-    list      p=16C84
+    list      p=16f84
 
-#include <p16C84.inc>
+#include <p16f84.inc>
 
 ; Configuration word
 ;  - Code Protection Off
@@ -88,9 +88,9 @@
 
 ; Include serial link interface macros
 #define CLKD_SERIAL
-#include <\dev\projects\utility\pic\asyn_srl.inc>
+#include "utility/asyn_srl.inc"
 #define CLKD_LINK
-#include <\dev\projects\utility\pic\link_hd.inc>
+#include "utility/link_hd.inc"
 
 
 ;**********************************************************************
