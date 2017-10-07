@@ -2,6 +2,7 @@
 *.lst
 *.ERR
 *.LST
+**/.map
 **/build/
 **/default/
 **/dist/
