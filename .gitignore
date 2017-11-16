@@ -1,7 +1,15 @@
+*.cof
 *.err
 *.lst
+*.map
+*.mcs
+*.mcw
+*.COF
 *.ERR
 *.LST
+*.MAP
+*.MCS
+*.MCW
 **/.map
 **/build/
 **/default/
