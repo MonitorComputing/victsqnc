@@ -187,12 +187,13 @@ BLKSTATE       EQU  B'00000111' ; Mask to isolate block
 
 ; Aspect values (range from 0 - stop, to 3 - clear)
 ASPSTP      EQU     B'00000000' ; Stop aspect value
-ASPWRN      EQU     B'01000000' ; Warning aspect value mask
-ASPCLR2     EQU     B'10000000' ; Clear aspect value mask
+ASPWRN      EQU     B'01000000' ; Warning aspect value
+ASPCLR2     EQU     B'10000000' ; Clear aspect value
 ASPCLR      EQU     B'11000000' ; Clear aspect value
-ASPDGFLG    EQU     7           ; Clear aspect value flag bit
+ASPCLFLG    EQU     7           ; Clear aspect flag bit
 ASPINCR     EQU     B'01000000' ; Aspect value increment
 ASPSTATE    EQU     B'11000000' ; Aspect value mask
+ASPRESET    EQU     ASPCLR
 
 ; Controller status flags
 ENTFLG      EQU     1           ; Entrance detection bit in status byte
@@ -333,16 +334,12 @@ lclCntlr        ; Status of this controller
                 ;   bit 4    - Signal inhibit (display red aspect)
                 ;   bit 5    - Exit detection
                 ;   bits 6,7 - Aspect value
-                ;     0 - Stop
-                ;     1 - Warning
-                ;     2 - Clear
-                ;     3 - Clear
 
 nxtCntlr        ; Status received from next controller
                 ;   bits 0,3 - Ignored (ones complement of bits 4 to 7)
                 ;   bit 4    - Special speed
                 ;   bit 5    - Line reversed
-                ;   bits 6,7 - Aspect value (bits as for this controller)
+                ;   bits 6,7 - Aspect value
 
 prvCntlr        ; Status received from previous controller
                 ;   bit 0    - Ignored
@@ -351,7 +348,7 @@ prvCntlr        ; Status received from previous controller
                 ; Status sent to previous controller
                 ;   bit 4    - Special speed
                 ;   bit 5    - Line reversed
-                ;   bits 6,7 - Aspect value (bits as for this controller)
+                ;   bits 6,7 - Aspect value
 
 aspectTime      ; Aspect interval for simulating next signal
 nxtTimer        ; Second counter for simulating next signal
@@ -524,33 +521,33 @@ GetAspectMask
 
     movf    aspOut,W            ; Get aspect display value
     btfsc   STATUS,Z            ; Skip if not zero ...
-    retlw   (REDMSKU | REDMSKL) ; ... else display stop - red / red
+    retlw   (REDMSKU | REDMSKL) ; ... else display stop, red over red
 
-    btfss   aspOut,ASPDGFLG ; Skip if green or double yellow required ...
-    goto    WarnAspect      ; ... else single yellow (warning) required
+    btfss   aspOut,ASPCLFLG ; Skip if clear aspects required ...
+    goto    WarnAspect      ; ... else warning aspects required
 
     ; Display clear:
-    ;  - normal speed = green / red,
-    ;  - medium speed = red / green
-    ;  - reduce to medium speed = yellow / green
+    ;  - normal speed = green over red,
+    ;  - medium speed = red over green
+    ;  - reduce to medium speed = yellow over green
     btfsc   prvCntlr,SPDFLG     ; Skip if signal at normal speed ...
-    retlw   (REDMSKU | GRNMSKL) ; ... else display medium clear - red / green
+    retlw   (REDMSKU | GRNMSKL) ; ... else display medium clear, red over green
     btfss   nxtCntlr,SPDFLG     ; ... else skip if next signal medium speed ...
-    retlw   (GRNMSKU | REDMSKL) ; ... else display normal clear - green / red
+    retlw   (GRNMSKU | REDMSKL) ; ... else display normal clear, green over red
 
     ; Signal at normal speed, next at medium
-    ; Display reduce to medium speed - yellow / green
+    ; Display reduce to medium speed, yellow over green
     movlw   GRNMSKL         ; Lower head displays green
     goto    UpperYellow     ; Upper head displays yellow
 
 WarnAspect
     ; Display warning
 
-    btfsc   prvCntlr,SPDFLG   ; Skip if signal at normal speed ...
-    goto    MediumWarn        ; ... else display medium speed yellow aspect
+    btfsc   prvCntlr,SPDFLG ; Skip if signal at normal speed ...
+    goto    MediumWarn      ; ... else display medium speed yellow aspect
 
 NormalWarn
-    ; Display normal speed warning - yellow / red
+    ; Display normal speed warning, yellow over red
     movlw   REDMSKL         ; Lower head displays red
 
 UpperYellow
@@ -562,7 +559,7 @@ UpperYellow
     return
 
 MediumWarn
-    ; Display medium speed warning - red / yellow
+    ; Display medium speed warning, red over yellow
     movlw   REDMSKU         ; Upper head displays red
 
     ; Lower head displays yellow, carry already appropriate for yellow PWM
@@ -571,6 +568,7 @@ MediumWarn
     btfsc   STATUS,C
     iorlw   GRNMSKL
     return
+
 
 ;**********************************************************************
 ; Main program initialisation code
@@ -926,7 +924,7 @@ NextLinkEnd
     ; the signal aspect for the next block (either received or simulated)
 
     movlw   ~ASPSTATE
-    andwf   lclCntlr,F      ; Clear signal aspect value bits
+    andwf   lclCntlr,F      ; Clear local signal aspect value bits
 
     movlw   ASPSTATE
     andwf   nxtCntlr,W      ; Get local signal aspect from next controller
@@ -935,12 +933,7 @@ NextLinkEnd
     iorwf   lclCntlr,F      ; ... else use the signal aspect for display
 
     ; This block's signal aspect value (displayed by previous controller)
-    ; depends on the aspect value of the local signal such that:
-    ; 'Local'    ->    'This'
-    ; Red              Yellow
-    ; Yellow           Double Yellow
-    ; Double Yellow    Green
-    ; Green            Green
+    ; depends on the aspect value of the local signal.
 
     movlw   ~ASPSTATE
     andwf   prvCntlr,F      ; Clear signal aspect value bits (= stop aspect)
@@ -948,7 +941,7 @@ NextLinkEnd
     movlw   ASPINCR
     addwf   lclCntlr,W      ; Increment local signal aspect value into W
     btfsc   STATUS,C        ; Skip if no overflow ...
-    movlw   ASPCLR          ; ... else set for clear aspect
+    movlw   ASPRESET        ; ... else reset aspect value
     andlw   ASPSTATE        ; Isolate new aspect value bits   
 
     btfss   nxtCntlr,REVFLG ; Skip if next block is line reversed ...
@@ -1195,6 +1188,7 @@ LinkTxN     LinkTx  lnkNState, SerTxN
 
 LinkRxToN   IsLinkRxTo  lnkNState, lnkNTimer
     return
+
 
 ;**********************************************************************
 ; Instance previous block interface routine macros
