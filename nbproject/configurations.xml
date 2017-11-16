@@ -12,7 +12,7 @@
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
                    projectFiles="true">
-      <itemPath>blcksqnc.asm</itemPath>
+      <itemPath>victsqnc.asm</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -441,7 +441,14 @@
                   value=""/>
         <property key="warningmessagebreakoptions.warningmessages" value="holdstate"/>
       </Simulator>
-      <item path="blcksqnc.asm" ex="false" overriding="true">
+      <mpasmsuite>
+        <property key="absolute-mode" value="true"/>
+        <property key="eeprom-width" value="8"/>
+        <property key="extended-mode" value="false"/>
+        <property key="extended-mode-mpasm" value="false"/>
+        <property key="extended-mode-mplink" value="false"/>
+      </mpasmsuite>
+      <item path="victsqnc.asm" ex="false" overriding="true">
         <MPASMWIN-AS>
           <property key="cross.reference.file" value=""/>
           <property key="default.radix" value="DEC"/>
@@ -459,13 +466,6 @@
         <mpasmsuite>
         </mpasmsuite>
       </item>
-      <mpasmsuite>
-        <property key="absolute-mode" value="true"/>
-        <property key="eeprom-width" value="8"/>
-        <property key="extended-mode" value="false"/>
-        <property key="extended-mode-mpasm" value="false"/>
-        <property key="extended-mode-mplink" value="false"/>
-      </mpasmsuite>
     </conf>
   </confs>
 </configurationDescriptor>

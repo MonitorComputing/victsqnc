@@ -25,20 +25,12 @@ subfolder_lib=
 subfolder_lkr=
 [FILE_SUBFOLDERS]
 file_000=.
-file_001=.
-file_002=.
 [GENERATED_FILES]
 file_000=no
-file_001=no
-file_002=no
 [OTHER_FILES]
 file_000=no
-file_001=no
-file_002=no
 [FILE_INFO]
-file_000=blcksqnc.asm
-file_001=/home/chris/Dev\projects\utility\pic\asyn_srl.inc
-file_002=/home/chris/Dev\projects\utility\pic\link_hd.inc
+file_000=victsqnc.asm
 [SUITE_INFO]
 suite_guid={6B3DAA78-59C1-46DD-B6AA-DBDAE4E06484}
 suite_state=generate-absolute-code
@@ -56,7 +48,7 @@ enable=0
 transport=0
 format=0
 [CUSTOM_BUILD]
-Pre-Build=cmd /d /c "del victsqnc.hex"
+Pre-Build=
 Pre-BuildEnabled=1
-Post-Build=cmd /d /c "copy blcksqnc.hex victsqnc.hex /v /y"
+Post-Build=
 Post-BuildEnabled=1
