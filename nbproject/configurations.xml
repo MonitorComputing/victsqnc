@@ -62,7 +62,7 @@
       </makeCustomizationType>
       <MPASMWIN-AS>
         <property key="cross.reference.file" value=""/>
-        <property key="default.radix" value="HEX"/>
+        <property key="default.radix" value="DEC"/>
         <property key="enable.case.sensitivity" value="true"/>
         <property key="hex.output.format" value="INHX32"/>
         <property key="preprocessor.macros" value=""/>
@@ -215,6 +215,8 @@
         <property key="warningmessagebreakoptions.W0051_INSTRUCTION_DIV_NOT_ENOUGH_REPEAT"
                   value="report"/>
         <property key="warningmessagebreakoptions.W0052_INSTRUCTION_DIV_TOO_MANY_REPEAT"
+                  value="report"/>
+        <property key="warningmessagebreakoptions.W0053_INVALID_INTCON_VS_FIELD_VALUE"
                   value="report"/>
         <property key="warningmessagebreakoptions.W0101_SIM_UPDATE_FAILED"
                   value="report"/>
