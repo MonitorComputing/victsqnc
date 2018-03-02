@@ -57,7 +57,7 @@ pwmAcc          ; PWM accumulator for yellow aspect
 afterRAM
             endc
 endRAM      EQU afterRAM - 1
-#if RAM_End < endRAM
+#if RAM0_End < endRAM
     error "This program ran out of RAM!"
 #endif
 
