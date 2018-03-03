@@ -22,13 +22,13 @@
 ;                            +---+ +---+                              *
 ;           Lower red  <- RA2|1  |_| 18|RA1 -> Upper green            *
 ;         Lower green  <- RA3|2      17|RA0 -> Upper red              *
-;          !Detecting <-> RA4|3      16|                              *
-;                            |4      15|                              *
+;          !Detecting <-> RA4|3      16|RA7 -> !Emitter               *
+;               Sensor -> RA5|4      15|RA6 -> !Block occupied        *
 ;                            |5      14|                              *
-;     !Latch Signal On -> RB0|6      13|RB7 <-> Next / <- !Inhibit    *
-;       !Line reversed -> RB1|7      12|RB6 <-> Previous              *
-;   Line bidirectional -> RB2|8      11|RB5 ->  !Emitter              *
-;         Normal speed -> RB3|9      10|RB4 <-  Sensor                *
+;     !Latch Signal On -> RB0|6      13|RB7 <- !ToTi (block occupied) *
+;       !Line reversed -> RB1|7      12|RB6 <- !Approach clear        *
+;   Line bidirectional -> RB2|8      11|RB5 <-> Next / <- !Inhibit    *
+;         Normal speed -> RB3|9      10|RB4 <-> Previous              *
 ;                            +---------+                              *
 ;                                                                     *
 ;**********************************************************************
@@ -54,11 +54,11 @@ GRNMSKL     EQU     B'00001000' ; Mask for lower head green aspect
 ylwDuty         ; PWM duty cycle for yellow aspect
 pwmAcc          ; PWM accumulator for yellow aspect
 
-afterRAM
+afterRAM0
             endc
-endRAM      EQU afterRAM - 1
-#if RAM0_End < endRAM
-    error "This program ran out of RAM!"
+endRAM0     EQU afterRAM0 - 1
+#if RAM0_End < endRAM0
+    error "This program ran out of Bank 0 RAM!"
 #endif
 
 
