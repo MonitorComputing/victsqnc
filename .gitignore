@@ -17,3 +17,5 @@
 **/nbproject/private/
 **/nbproject/Makefile*
 **/nbproject/Package*
+/build/
+/dist/
