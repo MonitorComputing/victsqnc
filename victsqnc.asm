@@ -84,8 +84,8 @@ UserInit    macro
 ; Include serial link interface macros
 ;  - Serial link bit timing is performed by link service routines
 #define CLKD_SERIAL
-#include "blcksqnc/utility/asyn_srl.inc"
-#include "blcksqnc/utility/link_hd.inc"
+#include "blcksqnc/utility_pic/asyn_srl.inc"
+#include "blcksqnc/utility_pic/link_hd.inc"
 #include "blcksqnc/blcksqnc_cod.inc"
 
 
